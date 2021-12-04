@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31919.166
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ValueObjectFluentValidation", "ValueObjectFluentValidation\ValueObjectFluentValidation.csproj", "{86FE7F2A-2E4C-4F90-A823-745C0801B7D6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ValueObjectFluentValidationTests", "ValueObjectFluentValidationTests\ValueObjectFluentValidationTests.csproj", "{53725E24-F89C-4CC0-94C1-C26E769C11D6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{86FE7F2A-2E4C-4F90-A823-745C0801B7D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86FE7F2A-2E4C-4F90-A823-745C0801B7D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86FE7F2A-2E4C-4F90-A823-745C0801B7D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86FE7F2A-2E4C-4F90-A823-745C0801B7D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{53725E24-F89C-4CC0-94C1-C26E769C11D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53725E24-F89C-4CC0-94C1-C26E769C11D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53725E24-F89C-4CC0-94C1-C26E769C11D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53725E24-F89C-4CC0-94C1-C26E769C11D6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0A84C401-4B32-4CC4-8233-6BE2CC5E0AA3}
+	EndGlobalSection
+EndGlobal
