@@ -1,4 +1,8 @@
-﻿namespace ValueObjectFluentValidation
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace ValueObjectFluentValidation
 {
     public class Class1
     {
@@ -20,8 +24,8 @@
             throw new NotImplementedException();
         }
 
-        public static IGroupValidator<T1, T2> Group<T1,T2>(
-            IValidatorBuilder<T1> firstValidator, 
+        public static IGroupValidator<T1, T2> Group<T1, T2>(
+            IValidatorBuilder<T1> firstValidator,
             IValidatorBuilder<T2> secondValidator)
         {
             throw new NotImplementedException();
@@ -30,20 +34,17 @@
 
     public interface IGroupValidator<T1, T2>
     {
-        IWhenValid<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> func);
+        Result<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> func);
     }
 
-
-    internal class ValidatorBuilderInitial<T> : ValidationBuilder<T>, IValidatorBuilderInitial<T>
+    public interface IGroupValidator<T1, T2, T3>
     {
-        public IValidatorBuilder<TTransformed> Transform<TTransformed>(Func<T, TTransformed> transformFunc)
-        {
-            return this;
-        }
+        Result<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, TValueObject> func);
+    }
 
-        public ValidatorBuilderInitial()
-        {
-        }
+    public interface IGroupValidator<T1, T2, T3, T4>
+    {
+        Result<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, T4, TValueObject> func);
     }
 
     internal class ValidationBuilder<T> : IValidatorBuilder<T>
@@ -62,7 +63,7 @@
             return this;
         }
 
-        public IWhenValid<TValueObject> WhenValid<TValueObject>(
+        public Result<TValueObject> WhenValid<TValueObject>(
             Func<T, TValueObject> createValueObjectFunc)
         {
             throw new NotImplementedException();
@@ -104,13 +105,8 @@
     {
         IValidatorBuilder<T> AddValidator(IPropertyValidator<T> propertyValidator);
 
-        public IWhenValid<TValueObject> WhenValid<TValueObject>(
+        public Result<TValueObject> WhenValid<TValueObject>(
             Func<T, TValueObject> createValueObjectFunc);
-    }
-
-    public interface IWhenValid<TValueObject>
-    {
-        Result<TValueObject> Validate();
     }
 
     //public interface IValidatorBuilder<TInitial>
@@ -227,7 +223,7 @@
         }
     }
 
-    public class RequestValidator
+    public static class RequestValidator
     {
         public static IRequestValidatorBuilder<T> For<T>(T request)
         {
@@ -237,28 +233,43 @@
 
     public interface IRequestValidatorBuilder<T>
     {
-        IRequestValidatorBuilder<T> RuleFor<TProperty, TValueObject>(
-            Func<T, TProperty> func,
-            Func<TProperty, Result<TValueObject>> valueObjectFunc)
-        where TProperty: struct
-        {
+        Result<TValidRequest> WhenValid<T1, T2, TValidRequest>(Func<T1, T2, TValidRequest> func);
 
-        }
+        IGroupValidator<T1, T2> Group<T1, T2>(
+            IRule<T, T1> rule1,
+            IRule<T, T2> rule2);
 
-        IRequestValidatorBuilder<T> RuleFor<TValueObject>(
-            Func<T, string?> func,
-            Func<string?, Result<TValueObject>> valueObjectFunc)
-        {
+        IGroupValidator<T1, T2, T3> Group<T1, T2, T3>(
+            IRule<T, T1> rule1,
+            IRule<T, T2> rule2,
+            IRule<T, T3> rule3);
 
-        }
-
-        IWhenValid<TValidRequest> WhenValid<T1, T2, TValidRequest>(Func<T1, T2, TValidRequest> func);
+        IGroupValidator<T1, T2, T3, T4> Group<T1, T2, T3, T4>(
+            IRule<T, T1> rule1,
+            IRule<T, T2> rule2,
+            IRule<T, T3> rule3,
+            IRule<T, T4> rule4);
     }
 
-    public static IGroupValidator<T1, T2> Group<T1, T2>(
-        IValidatorBuilder<T1> firstValidator,
-        IValidatorBuilder<T2> secondValidator)
+    public interface IRequestValidator<T, TValid>
     {
-        throw new NotImplementedException();
+        Result<TValid> Validate(T value);
+    }
+
+    public interface IRule<T, TValid>
+    {
+        IRule<T, TValid> WithPropertyName(string propertyName);
+    }
+
+    public abstract class AbstractRequestValidator<T, TValid> : IRequestValidator<T, TValid>
+    {
+        public abstract Result<TValid> Validate(T value);
+
+        public IRule<T, TValueObject> Rule<TProperty, TValueObject>(
+            Func<T, TProperty> func,
+            Func<TProperty, Result<TValueObject>> valueObjectFunc)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

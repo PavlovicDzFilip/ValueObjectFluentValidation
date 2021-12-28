@@ -26,14 +26,11 @@ namespace ValueObjectFluentValidationTests
 
         public static Result<ApplicationName> TryCreate(string? name)
         {
-            var validator = Validator.For(name)
+            return Validator.For(name)
                 .Transform(n => (n ?? string.Empty).Trim())
                 .NotNull()
                 .Length(3, 10)
                 .WhenValid(n => new ApplicationName(n));
-
-            var result = validator.Validate();
-            return result;
         }
     }
 
@@ -58,58 +55,46 @@ namespace ValueObjectFluentValidationTests
             var numberValidator = Validator.For(number)
                 .NotNull();
 
-            var validator = Validator.Group(streetValidator, numberValidator)
+            return Validator
+                .Group(streetValidator, numberValidator)
                 .WhenValid((s, n) => new Address(s, n));
-
-            return validator.Validate();
         }
     }
 
-
-    //public class GenericValidator<T, TValueObject> : AbstractValidator<T>
-    //{
-    //    public Result<TValueObject> ValidateAndTransform(T value, Func<T, TValueObject> createValueObjectFunc)
-    //    {
-    //        if (typeof(T) == typeof(string) && value is null)
-    //        {
-    //            value = (T)(object)string.Empty;
-    //        }
-
-    //        var validationResult = Validate(value);
-    //        if (validationResult.IsValid)
-    //        {
-    //            return Result<TValueObject>.Success(createValueObjectFunc(value));
-    //        }
-
-    //    }
-    //}
-
     public class CreateApplication
     {
-        public record Command(string? Name, string? Street, string? Number, string Tmp);
+        public record Command(string? Name, string? Street, string? Number, int Tmp, string NonNullStr);
+        public record CommandWithAddress(string? Name, AddressDto Address);
+        public record AddressDto(string Street, string Number);
 
-        private record ValidCommand(ApplicationName Name);
+        public record ValidCommand(ApplicationName Name);
 
-        public class RequestValidatorTransformator
+        public class RequestValidatorTransformator : AbstractRequestValidator<Command, ValidCommand>
         {
-            public Result<ValidCommand> Validate(Command command)
+            public override Result<ValidCommand> Validate(Command command)
             {
+                var r3 = Rule(x => x.NonNullStr, Result<string>.Success);
                 return RequestValidator.For(command)
-                    .RuleFor(cmd => cmd.Name, ApplicationName.TryCreate)
-                    .RuleFor(cmd => (cmd.Street, cmd.Number), v => Address.TryCreate(v.Street, v.Number))
-                    .WhenValid((name, address) => new ValidCommand(name))
-                    .Validate();
-                //return new ValidCommand(
-                //    DoValidation(command, cmd => cmd.Name, ApplicationName.TryCreate));
+                    .Group(
+                        Rule(cmd => cmd.Name, ApplicationName.TryCreate),
+                        Rule(cmd => (cmd.Street, cmd.Number), v => Address.TryCreate(v.Street, v.Number))
+                            .WithPropertyName("Address")
+                        )
+                    .WhenValid((name, address) => new ValidCommand(name));
             }
+        }
 
-            public TValueObject DoValidation<TCommand, TValueObject, TProperty>(
-                TCommand command,
-                Expression<Func<TCommand, TProperty>> expr,
-                Func<TProperty, Result<TValueObject>> valueObjectFactory)
+        public class AddressDtoValidator : AbstractRequestValidator<AddressDto, Address>
+        {
+            public override Result<Address> Validate(AddressDto value)
             {
-                //
-                return default;
+                return RequestValidator
+                    .For(value)
+                    .Group(
+                        Rule(cmd => (cmd.Street, cmd.Number), tuple => Address.TryCreate(tuple.Street, tuple.Number)),
+                        Rule(cmd => cmd.Number, x => Result<string>.Failure(new IValidationFailure[] { new ValueNullFailure() }))
+                    )
+                    .WhenValid((a, x) => a);
             }
         }
 
