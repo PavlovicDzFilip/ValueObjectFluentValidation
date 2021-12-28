@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace ValueObjectFluentValidation
+﻿namespace ValueObjectFluentValidation
 {
     public class Class1
     {
@@ -210,6 +206,21 @@ namespace ValueObjectFluentValidation
         }
     }
 
+    public class GroupResult<T> : Result<T>
+    {
+        private readonly IDictionary<string, IEnumerable<IValidationFailure>> _validationErrors;
+
+        public GroupResult(T value) : base(value)
+        {
+        }
+
+        public GroupResult(IDictionary<string, IEnumerable<IValidationFailure>> validationErrors) :
+            base(validationErrors.SelectMany(error => error.Value))
+        {
+            _validationErrors = validationErrors;
+        }
+    }
+
     public static class ValidatorExtensions
     {
         public static IValidatorBuilder<T> NotNull<T>(this IValidatorBuilder<T> validatorBuilder)
@@ -256,18 +267,36 @@ namespace ValueObjectFluentValidation
         Result<TValid> Validate(T value);
     }
 
+    public interface ISingleRule<T, TValid> : IRule<T, TValid>
+    {
+        IRule<T, TValid> WithData(string key, object data);
+    }
+
     public interface IRule<T, TValid>
     {
-        IRule<T, TValid> WithPropertyName(string propertyName);
+
+    }
+
+    public interface IGroupRule<T, TValid> : IRule<T, TValid>
+    {
+
     }
 
     public abstract class AbstractRequestValidator<T, TValid> : IRequestValidator<T, TValid>
     {
         public abstract Result<TValid> Validate(T value);
 
-        public IRule<T, TValueObject> Rule<TProperty, TValueObject>(
+        public ISingleRule<T, TValueObject> Rule<TProperty, TValueObject>(
             Func<T, TProperty> func,
             Func<TProperty, Result<TValueObject>> valueObjectFunc)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IGroupRule<T, TValueObject> Rule<TProperty1, TProperty2, TValueObject>(
+            Func<T, TProperty1> prop1Selector,
+            Func<T, TProperty2> prop2Selector,
+            Func<TProperty1, TProperty2, Result<TValueObject>> valueObjectFunc)
         {
             throw new NotImplementedException();
         }

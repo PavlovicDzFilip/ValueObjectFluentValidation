@@ -77,9 +77,7 @@ namespace ValueObjectFluentValidationTests
                 return RequestValidator.For(command)
                     .Group(
                         Rule(cmd => cmd.Name, ApplicationName.TryCreate),
-                        Rule(cmd => (cmd.Street, cmd.Number), v => Address.TryCreate(v.Street, v.Number))
-                            .WithPropertyName("Address")
-                        )
+                        Rule(cmd => cmd.Street, cmd => cmd.Number, Address.TryCreate))
                     .WhenValid((name, address) => new ValidCommand(name));
             }
         }
