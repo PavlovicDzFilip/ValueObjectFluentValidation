@@ -1,17 +1,36 @@
-using System;
-using System.Linq.Expressions;
+using Shouldly;
 using ValueObjectFluentValidation;
 using Xunit;
 
 namespace ValueObjectFluentValidationTests
 {
-    public class UnitTest1
+    public class SingleFieldValidator
     {
         [Fact]
-        public void Test1()
+        public void WithNoRules_IsValid()
         {
-            var appName = ApplicationName.TryCreate("nesto");
-            var a = 5;
+            // Arrange
+            var value = string.Empty;
+
+            // Act
+            var result = NoRulesValueObject.TryCreateWithNoRules(value);
+
+            // Assert
+            result
+                .ShouldNotBeNull()
+                .TryGet(out var valueObject).ShouldBeTrue();
+
+            valueObject.ShouldNotBeNull();
+        }
+
+        public class NoRulesValueObject
+        {
+            public static Result<NoRulesValueObject> TryCreateWithNoRules(string? value)
+            {
+                return Validator
+                    .For(value)
+                    .WhenValid(s => new NoRulesValueObject());
+            }
         }
     }
 

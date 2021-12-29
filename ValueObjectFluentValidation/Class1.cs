@@ -15,9 +15,9 @@
         //    return new ValidationBuilder<T>(value);
         //}
 
-        public static IValidatorBuilderInitial<T> For<T>(T name)
+        public static IValidatorBuilderInitial<T> For<T>(T value)
         {
-            throw new NotImplementedException();
+            return new ValidatorBuilderInitial<T>(value);
         }
 
         public static IGroupValidator<T1, T2> Group<T1, T2>(
@@ -25,6 +25,34 @@
             IValidatorBuilder<T2> secondValidator)
         {
             throw new NotImplementedException();
+        }
+
+        private record ValidatorBuilderInitial<T>(T Value) : 
+            ValidatorBuilder<T>(Value), 
+            IValidatorBuilderInitial<T>
+        {
+            public IValidatorBuilder<TTransformed> Transform<TTransformed>(Func<T, TTransformed> transformFunc)
+            {
+                var transformed = transformFunc(Value);
+                return new ValidatorBuilder<TTransformed>(transformed);
+            }
+        }
+
+        private record ValidatorBuilder<T>(T Value) : 
+            IValidatorBuilder<T>
+        {
+            protected T Value { get; } = Value;
+
+            public IValidatorBuilder<T> AddValidator(IPropertyValidator<T> propertyValidator)
+            {
+                throw new NotImplementedException();
+            }
+
+            public Result<TValueObject> WhenValid<TValueObject>(Func<T, TValueObject> createValueObjectFunc)
+            {
+                var valueObject = createValueObjectFunc(Value);
+                return Result<TValueObject>.Success(valueObject);
+            }
         }
     }
 
