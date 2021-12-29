@@ -23,13 +23,101 @@ namespace ValueObjectFluentValidationTests
             valueObject.ShouldNotBeNull();
         }
 
-        public class NoRulesValueObject
+        [Fact]
+        public void WithSatisfiedRules_IsValid()
         {
+            // Arrange
+            var value = "not null value";
+
+            // Act
+            var result = NoRulesValueObject.TryCreateWithNotNullRule(value);
+
+            // Assert
+            result
+                .ShouldNotBeNull()
+                .TryGet(out var valueObject)
+                    .ShouldBeTrue();
+
+            valueObject.ShouldNotBeNull();
+            valueObject.Value.ShouldBe(value);
+        }
+
+        [Fact]
+        public void WithNotSatisfiedRule_IsNotValid()
+        {
+            // Arrange
+
+            // Act
+            var result = NoRulesValueObject.TryCreateWithNotNullRule(null);
+
+            // Assert
+            result
+                .ShouldNotBeNull()
+                .TryGet(out var valueObject)
+                    .ShouldBeFalse();
+
+            valueObject.ShouldBeNull();
+            result.Errors
+                .ShouldHaveSingleItem()
+                .ShouldBeOfType<ValueNullFailure>();
+        }
+
+        [Theory]
+        [InlineData("2c")]
+        [InlineData("11character")]
+        public void WithNotSatisfiedRules_IsNotValid(string? value)
+        {
+            // Arrange
+
+            // Act
+            var result = NoRulesValueObject.TryCreateWithMultipleRules(value);
+
+            // Assert
+            result
+                .ShouldNotBeNull()
+                .TryGet(out var valueObject)
+                .ShouldBeFalse();
+
+            valueObject.ShouldBeNull();
+            var failure = result.Errors
+                .ShouldHaveSingleItem()
+                .ShouldBeOfType<StringLengthFailure>();
+            failure.MinLength.ShouldBe(3);
+            failure.MaxLength.ShouldBe(10);
+            failure.ActualLength.ShouldBe(value.Length);
+        }
+
+        public record NoRulesValueObject
+        {
+            public string? Value { get; }
+
+            private NoRulesValueObject(string? value)
+            {
+                Value = value;
+            }
+
             public static Result<NoRulesValueObject> TryCreateWithNoRules(string? value)
             {
                 return Validator
                     .For(value)
-                    .WhenValid(s => new NoRulesValueObject());
+                    .WhenValid(s => new NoRulesValueObject(s));
+            }
+
+            public static Result<NoRulesValueObject> TryCreateWithNotNullRule(string? value)
+            {
+                return Validator
+                    .For(value)
+                    .NotNull()
+                    .WhenValid(s => new NoRulesValueObject(s));
+            }
+
+            public static Result<NoRulesValueObject> TryCreateWithMultipleRules(string? value)
+            {
+                return Validator
+                    .For(value)
+                    .NotNull()
+                    .Length(3, 10)
+                    .WhenValid(s => new NoRulesValueObject(s));
             }
         }
     }

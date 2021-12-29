@@ -27,25 +27,45 @@
             throw new NotImplementedException();
         }
 
-        private record ValidatorBuilderInitial<T>(T Value) : 
-            ValidatorBuilder<T>(Value), 
+        private record ValidatorBuilderInitial<T> :
+            ValidValidatorBuilder<T>,
             IValidatorBuilderInitial<T>
         {
+            public ValidatorBuilderInitial(T value) : base(value)
+            {
+            }
+
             public IValidatorBuilder<TTransformed> Transform<TTransformed>(Func<T, TTransformed> transformFunc)
             {
                 var transformed = transformFunc(Value);
-                return new ValidatorBuilder<TTransformed>(transformed);
+                return new ValidValidatorBuilder<TTransformed>(transformed);
             }
         }
 
-        private record ValidatorBuilder<T>(T Value) : 
+        private record ValidValidatorBuilder<T> :
             IValidatorBuilder<T>
         {
-            protected T Value { get; } = Value;
+            public ValidValidatorBuilder(T value)
+            {
+                this.Value = value;
+            }
+
+            protected T Value { get; }
 
             public IValidatorBuilder<T> AddValidator(IPropertyValidator<T> propertyValidator)
             {
-                throw new NotImplementedException();
+                var isValid = propertyValidator.TryValidate(Value, out var failure);
+                if (isValid)
+                {
+                    return this;
+                }
+
+                if (failure is null)
+                {
+                    throw new FailureNotSetException();
+                }
+
+                return new InvalidValidationBuilder<T>(new[] { failure });
             }
 
             public Result<TValueObject> WhenValid<TValueObject>(Func<T, TValueObject> createValueObjectFunc)
@@ -53,6 +73,34 @@
                 var valueObject = createValueObjectFunc(Value);
                 return Result<TValueObject>.Success(valueObject);
             }
+        }
+
+        private record InvalidValidationBuilder<T> : IValidatorBuilder<T>
+        {
+            private readonly IValidationFailure[] _failures;
+
+            public InvalidValidationBuilder(IValidationFailure[] failures)
+            {
+                _failures = failures;
+            }
+
+            public IValidatorBuilder<T> AddValidator(IPropertyValidator<T> propertyValidator)
+            {
+                return this;
+            }
+
+            public Result<TValueObject> WhenValid<TValueObject>(Func<T, TValueObject> createValueObjectFunc)
+            {
+                return Result<TValueObject>.Failure(_failures);
+            }
+        }
+    }
+
+    public class FailureNotSetException : Exception
+    {
+        public FailureNotSetException() :
+            base($"Validator failed but did not return a valid {nameof(IValidationFailure)}")
+        {
         }
     }
 
@@ -171,7 +219,36 @@
         }
     }
 
+    public class StringLengthValidator : IPropertyValidator<string>
+    {
+        private readonly int _minLength;
+        private readonly int _maxLength;
+
+        public StringLengthValidator(int minLength, int maxLength)
+        {
+            _minLength = minLength;
+            _maxLength = maxLength;
+        }
+
+        public bool TryValidate(string value, out IValidationFailure? failure)
+        {
+            failure = default;
+            if (value.Length < _minLength ||
+                value.Length > _maxLength)
+            {
+                failure = new StringLengthFailure(_minLength, _maxLength, value.Length);
+                return false;
+            }
+
+            return true;
+        }
+    }
+
     public class ValueNullFailure : IValidationFailure
+    {
+    }
+
+    public record StringLengthFailure(int MinLength, int MaxLength, int ActualLength) : IValidationFailure
     {
     }
 
@@ -258,7 +335,7 @@
 
         public static IValidatorBuilder<string> Length(this IValidatorBuilder<string> validatorBuilder, int minLength, int maxLength)
         {
-            return validatorBuilder.AddValidator(new NotNullValidator<string>());
+            return validatorBuilder.AddValidator(new StringLengthValidator(minLength, maxLength));
         }
     }
 
