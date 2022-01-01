@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Threading.Tasks;
 using Shouldly;
 using ValueObjectFluentValidation;
 using Xunit;
@@ -57,8 +59,7 @@ namespace ValueObjectFluentValidationTests
                     .ShouldBeFalse();
 
             valueObject.ShouldBeNull();
-            result.Errors
-                .ShouldHaveSingleItem()
+            result.Error
                 .ShouldBeOfType<ValueNullFailure>();
         }
 
@@ -79,12 +80,56 @@ namespace ValueObjectFluentValidationTests
                 .ShouldBeFalse();
 
             valueObject.ShouldBeNull();
-            var failure = result.Errors
-                .ShouldHaveSingleItem()
+            var failure = result.Error
                 .ShouldBeOfType<StringLengthFailure>();
             failure.MinLength.ShouldBe(3);
             failure.MaxLength.ShouldBe(10);
-            failure.ActualLength.ShouldBe(value.Length);
+            failure.ActualLength.ShouldBe(value!.Length);
+        }
+
+        [Fact]
+        public async Task WithSatisfiedAsyncRules_IsValid()
+        {
+            // Arrange
+            var value = "value";
+
+            // Act
+            var stopwatch = Stopwatch.StartNew();
+            var result = await NoRulesValueObject.TryCreateWithMultipleRulesAsync(value);
+            stopwatch.Stop();
+
+            // Assert
+            result
+                .ShouldNotBeNull()
+                .TryGet(out var valueObject)
+                .ShouldBeTrue();
+
+            valueObject.ShouldNotBeNull();
+
+            stopwatch.ElapsedMilliseconds.ShouldBeGreaterThan(2500);
+        }
+
+
+        [Fact]
+        public void InvokesAsyncValidatorSynchronously()
+        {
+            // Arrange
+            var value = "value";
+
+            // Act
+            var stopwatch = Stopwatch.StartNew();
+            var result =  NoRulesValueObject.TryCreateWithMultipleRulesSync(value);
+            stopwatch.Stop();
+
+            // Assert
+            result
+                .ShouldNotBeNull()
+                .TryGet(out var valueObject)
+                .ShouldBeTrue();
+
+            valueObject.ShouldNotBeNull();
+
+            stopwatch.ElapsedMilliseconds.ShouldBeGreaterThan(2500);
         }
 
         public record NoRulesValueObject
@@ -117,6 +162,26 @@ namespace ValueObjectFluentValidationTests
                     .For(value)
                     .NotNull()
                     .Length(3, 10)
+                    .WhenValid(s => new NoRulesValueObject(s));
+            }
+
+            public static Task<Result<NoRulesValueObject>> TryCreateWithMultipleRulesAsync(string? value)
+            {
+                return Validator
+                    .For(value)
+                    .NotNull()
+                    .Length(3, 10)
+                    .ValidAsync(3000)
+                    .WhenValidAsync(s => new NoRulesValueObject(s));
+            }
+
+            public static Result<NoRulesValueObject> TryCreateWithMultipleRulesSync(string? value)
+            {
+                return Validator
+                    .For(value)
+                    .NotNull()
+                    .Length(3, 10)
+                    .ValidAsync(3000)
                     .WhenValid(s => new NoRulesValueObject(s));
             }
         }
@@ -197,7 +262,7 @@ namespace ValueObjectFluentValidationTests
                     .For(value)
                     .Group(
                         Rule(cmd => (cmd.Street, cmd.Number), tuple => Address.TryCreate(tuple.Street, tuple.Number)),
-                        Rule(cmd => cmd.Number, x => Result<string>.Failure(new IValidationFailure[] { new ValueNullFailure() }))
+                        Rule(cmd => cmd.Number, x => Result<string>.Failure(new ValueNullFailure()))
                     )
                     .WhenValid((a, x) => a);
             }
