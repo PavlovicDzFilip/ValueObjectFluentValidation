@@ -1,276 +1,166 @@
-using System.Diagnostics;
-using System.Threading.Tasks;
 using Shouldly;
 using ValueObjectFluentValidation;
 using Xunit;
 
 namespace ValueObjectFluentValidationTests
 {
-    public class SingleFieldValidator
+    public class MultiFieldValidator
     {
         [Fact]
-        public void WithNoRules_IsValid()
+        public void WithNoRules_CreatesValueObject()
         {
             // Arrange
-            var value = string.Empty;
+            var street = "street";
+            var number = "1a";
 
             // Act
-            var result = NoRulesValueObject.TryCreateWithNoRules(value);
+            var result = Address.WithNoRules(street, number);
 
             // Assert
-            result
-                .ShouldNotBeNull()
-                .TryGet(out var valueObject).ShouldBeTrue();
+            result.TryGet(out var address)
+                .ShouldBeTrue();
 
-            valueObject.ShouldNotBeNull();
+            address.ShouldNotBeNull();
+            address.Street.ShouldBe(street);
+            address.Number.ShouldBe(number);
         }
 
         [Fact]
-        public void WithSatisfiedRules_IsValid()
+        public void WithNotSatisfiedRules_FailsToCreateValueObject()
         {
             // Arrange
-            var value = "not null value";
+            var street = "street";
+            var number = "1a";
 
             // Act
-            var result = NoRulesValueObject.TryCreateWithNotNullRule(value);
+            var result = Address.WithNotSatisfiedRules(street, number);
 
             // Assert
-            result
-                .ShouldNotBeNull()
-                .TryGet(out var valueObject)
-                    .ShouldBeTrue();
-
-            valueObject.ShouldNotBeNull();
-            valueObject.Value.ShouldBe(value);
-        }
-
-        [Fact]
-        public void WithNotSatisfiedRule_IsNotValid()
-        {
-            // Arrange
-
-            // Act
-            var result = NoRulesValueObject.TryCreateWithNotNullRule(null);
-
-            // Assert
-            result
-                .ShouldNotBeNull()
-                .TryGet(out var valueObject)
-                    .ShouldBeFalse();
-
-            valueObject.ShouldBeNull();
-            result.Error
-                .ShouldBeOfType<ValueNullFailure>();
-        }
-
-        [Theory]
-        [InlineData("2c")]
-        [InlineData("11character")]
-        public void WithNotSatisfiedRules_IsNotValid(string? value)
-        {
-            // Arrange
-
-            // Act
-            var result = NoRulesValueObject.TryCreateWithMultipleRules(value);
-
-            // Assert
-            result
-                .ShouldNotBeNull()
-                .TryGet(out var valueObject)
+            result.TryGet(out var address)
                 .ShouldBeFalse();
 
-            valueObject.ShouldBeNull();
-            var failure = result.Error
-                .ShouldBeOfType<StringLengthFailure>();
-            failure.MinLength.ShouldBe(3);
-            failure.MaxLength.ShouldBe(10);
-            failure.ActualLength.ShouldBe(value!.Length);
+            address.ShouldBeNull();
         }
 
-        [Fact]
-        public async Task WithSatisfiedAsyncRules_IsValid()
+        public record Address
         {
-            // Arrange
-            var value = "value";
+            public string Street { get; }
+            public string Number { get; }
 
-            // Act
-            var stopwatch = Stopwatch.StartNew();
-            var result = await NoRulesValueObject.TryCreateWithMultipleRulesAsync(value);
-            stopwatch.Stop();
-
-            // Assert
-            result
-                .ShouldNotBeNull()
-                .TryGet(out var valueObject)
-                .ShouldBeTrue();
-
-            valueObject.ShouldNotBeNull();
-
-            stopwatch.ElapsedMilliseconds.ShouldBeGreaterThan(2500);
-        }
-
-
-        [Fact]
-        public void InvokesAsyncValidatorSynchronously()
-        {
-            // Arrange
-            var value = "value";
-
-            // Act
-            var stopwatch = Stopwatch.StartNew();
-            var result =  NoRulesValueObject.TryCreateWithMultipleRulesSync(value);
-            stopwatch.Stop();
-
-            // Assert
-            result
-                .ShouldNotBeNull()
-                .TryGet(out var valueObject)
-                .ShouldBeTrue();
-
-            valueObject.ShouldNotBeNull();
-
-            stopwatch.ElapsedMilliseconds.ShouldBeGreaterThan(2500);
-        }
-
-        public record NoRulesValueObject
-        {
-            public string? Value { get; }
-
-            private NoRulesValueObject(string? value)
+            private Address(string street, string number)
             {
-                Value = value;
+                Street = street;
+                Number = number;
             }
 
-            public static Result<NoRulesValueObject> TryCreateWithNoRules(string? value)
+            public static GroupResult<Address> WithNoRules(string street, string number)
             {
+                var streetValidator = Validator.For(street);
+                var numberValidator = Validator.For(number);
+
                 return Validator
-                    .For(value)
-                    .WhenValid(s => new NoRulesValueObject(s));
+                    .Group(streetValidator, numberValidator)
+                    .WhenValid((s, n) => new Address(s, n));
             }
 
-            public static Result<NoRulesValueObject> TryCreateWithNotNullRule(string? value)
+            public static GroupResult<Address> WithNotSatisfiedRules(string street, string number)
             {
-                return Validator
-                    .For(value)
-                    .NotNull()
-                    .WhenValid(s => new NoRulesValueObject(s));
-            }
+                var streetValidator = Validator.For(street)
+                    .Length(10000, -5);
 
-            public static Result<NoRulesValueObject> TryCreateWithMultipleRules(string? value)
-            {
-                return Validator
-                    .For(value)
-                    .NotNull()
-                    .Length(3, 10)
-                    .WhenValid(s => new NoRulesValueObject(s));
-            }
+                var numberValidator = Validator.For(number)
+                    .Length(10001, -6);
 
-            public static Task<Result<NoRulesValueObject>> TryCreateWithMultipleRulesAsync(string? value)
-            {
                 return Validator
-                    .For(value)
-                    .NotNull()
-                    .Length(3, 10)
-                    .ValidAsync(3000)
-                    .WhenValidAsync(s => new NoRulesValueObject(s));
-            }
-
-            public static Result<NoRulesValueObject> TryCreateWithMultipleRulesSync(string? value)
-            {
-                return Validator
-                    .For(value)
-                    .NotNull()
-                    .Length(3, 10)
-                    .ValidAsync(3000)
-                    .WhenValid(s => new NoRulesValueObject(s));
+                    .Group(streetValidator, numberValidator)
+                    .WhenValid((s, n) => new Address(s, n));
             }
         }
     }
+    //public record ApplicationName
+    //{
+    //    public string Name { get; }
 
-    public record ApplicationName
-    {
-        public string Name { get; }
+    //    private ApplicationName(string name)
+    //    {
+    //        Name = name;
+    //    }
 
-        private ApplicationName(string name)
-        {
-            Name = name;
-        }
+    //    public static Result<ApplicationName> TryCreate(string? name)
+    //    {
+    //        return Validator.For(name)
+    //            .Transform(n => (n ?? string.Empty).Trim())
+    //            .NotNull()
+    //            .Length(3, 10)
+    //            .WhenValid(n => new ApplicationName(n));
+    //    }
+    //}
 
-        public static Result<ApplicationName> TryCreate(string? name)
-        {
-            return Validator.For(name)
-                .Transform(n => (n ?? string.Empty).Trim())
-                .NotNull()
-                .Length(3, 10)
-                .WhenValid(n => new ApplicationName(n));
-        }
-    }
+    //public record Address
+    //{
+    //    public string Street { get; }
+    //    public string Number { get; }
 
-    public record Address
-    {
-        public string Street { get; }
-        public string Number { get; }
+    //    private Address(string street, string number)
+    //    {
+    //        Street = street;
+    //        Number = number;
+    //    }
 
-        private Address(string street, string number)
-        {
-            Street = street;
-            Number = number;
-        }
+    //    public static Result<Address> TryCreate(string? street, string? number)
+    //    {
+    //        var streetValidator = Validator.For(street)
+    //            .Transform(n => (n ?? string.Empty).Trim())
+    //            .NotNull()
+    //            .Length(3, 10);
 
-        public static Result<Address> TryCreate(string? street, string? number)
-        {
-            var streetValidator = Validator.For(street)
-                .Transform(n => (n ?? string.Empty).Trim())
-                .NotNull()
-                .Length(3, 10);
+    //        var numberValidator = Validator.For(number)
+    //            .NotNull();
 
-            var numberValidator = Validator.For(number)
-                .NotNull();
+    //        return Validator
+    //            .Group(streetValidator, numberValidator)
+    //            .WhenValid((s, n) => new Address(s, n));
+    //    }
+    //}
 
-            return Validator
-                .Group(streetValidator, numberValidator)
-                .WhenValid((s, n) => new Address(s, n));
-        }
-    }
+    //public class CreateApplication
+    //{
+    //    public record Command(string? Name, string? Street, string? Number, int Tmp, string NonNullStr);
+    //    public record CommandWithAddress(string? Name, AddressDto Address);
+    //    public record AddressDto(string Street, string Number);
 
-    public class CreateApplication
-    {
-        public record Command(string? Name, string? Street, string? Number, int Tmp, string NonNullStr);
-        public record CommandWithAddress(string? Name, AddressDto Address);
-        public record AddressDto(string Street, string Number);
+    //    public record ValidCommand(ApplicationName Name);
 
-        public record ValidCommand(ApplicationName Name);
+    //    public class RequestValidatorTransformator : AbstractRequestValidator<Command, ValidCommand>
+    //    {
+    //        public override Result<ValidCommand> Validate(Command command)
+    //        {
+    //            var r3 = Rule(x => x.NonNullStr, Result<string>.Success);
+    //            return RequestValidator.For(command)
+    //                .Group(
+    //                    Rule(cmd => cmd.Name, ApplicationName.TryCreate),
+    //                    Rule(cmd => cmd.Street, cmd => cmd.Number, Address.TryCreate))
+    //                .WhenValid((name, address) => new ValidCommand(name));
+    //        }
+    //    }
 
-        public class RequestValidatorTransformator : AbstractRequestValidator<Command, ValidCommand>
-        {
-            public override Result<ValidCommand> Validate(Command command)
-            {
-                var r3 = Rule(x => x.NonNullStr, Result<string>.Success);
-                return RequestValidator.For(command)
-                    .Group(
-                        Rule(cmd => cmd.Name, ApplicationName.TryCreate),
-                        Rule(cmd => cmd.Street, cmd => cmd.Number, Address.TryCreate))
-                    .WhenValid((name, address) => new ValidCommand(name));
-            }
-        }
+    //    public class AddressDtoValidator : AbstractRequestValidator<AddressDto, Address>
+    //    {
+    //        public override Result<Address> Validate(AddressDto value)
+    //        {
+    //            return RequestValidator
+    //                .For(value)
+    //                .Group(
+    //                    Rule(cmd => (cmd.Street, cmd.Number), tuple => Address.TryCreate(tuple.Street, tuple.Number)),
+    //                    Rule(cmd => cmd.Number, x => Result<string>.Failure(new ValueNullFailure()))
+    //                )
+    //                .WhenValid((a, x) => a);
+    //        }
+    //    }
 
-        public class AddressDtoValidator : AbstractRequestValidator<AddressDto, Address>
-        {
-            public override Result<Address> Validate(AddressDto value)
-            {
-                return RequestValidator
-                    .For(value)
-                    .Group(
-                        Rule(cmd => (cmd.Street, cmd.Number), tuple => Address.TryCreate(tuple.Street, tuple.Number)),
-                        Rule(cmd => cmd.Number, x => Result<string>.Failure(new ValueNullFailure()))
-                    )
-                    .WhenValid((a, x) => a);
-            }
-        }
-
-        public class Handler
-        {
-            void Handle(ValidCommand command) { }
-        }
-    }
+    //    public class Handler
+    //    {
+    //        void Handle(ValidCommand command) { }
+    //    }
+    //}
 }

@@ -11,7 +11,7 @@
             IValidatorBuilder<T1> firstValidator,
             IValidatorBuilder<T2> secondValidator)
         {
-            throw new NotImplementedException();
+            return new GroupValidator<T1, T2>(firstValidator, secondValidator);
         }
 
         private class ValidatorBuilderInitial<T> :
@@ -30,6 +30,52 @@
         }
     }
 
+    internal class GroupValidator<T1, T2> : IGroupValidator<T1, T2>
+    {
+        private readonly IValidatorBuilder<T1> _firstValidator;
+        private readonly IValidatorBuilder<T2> _secondValidator;
+
+        public GroupValidator(
+            IValidatorBuilder<T1> firstValidator,
+            IValidatorBuilder<T2> secondValidator)
+        {
+            _firstValidator = firstValidator;
+            _secondValidator = secondValidator;
+        }
+
+        public GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
+        {
+            var failuresByValidatorIndex = new Dictionary<int, IValidationFailure[]>();
+
+            var validators = new object[] { _firstValidator, _secondValidator };
+            var v1 = _firstValidator.WhenValid(w => w);
+            var v2 = _secondValidator.WhenValid(w => w);
+
+            if (!v1.TryGet(out var v1Value))
+            {
+                failuresByValidatorIndex.Add(0, v1.Failures);
+            }
+
+            if (!v2.TryGet(out var v2Value))
+            {
+                failuresByValidatorIndex.Add(1, v2.Failures);
+            }
+
+            if (failuresByValidatorIndex.Any())
+            {
+                return GroupResult<TValueObject>.Failure(failuresByValidatorIndex);
+            }
+
+            var valueObject = createValueObjectFunc.Invoke(v1Value!, v2Value!);
+            return GroupResult<TValueObject>.Success(valueObject);
+        }
+
+        public Task<GroupResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public class FailureNotSetException : Exception
     {
         public FailureNotSetException() :
@@ -38,14 +84,15 @@
         }
     }
 
-    public interface IGroupValidator<T1, T2>
+    public interface IGroupValidator<out T1, out T2>
     {
-        Result<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> func);
+        GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+        Task<GroupResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
     }
 
     public interface IGroupValidator<T1, T2, T3>
     {
-        Result<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, TValueObject> func);
+        GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, TValueObject> func);
     }
 
     public interface IGroupValidator<T1, T2, T3, T4>
@@ -79,12 +126,15 @@
         public Result<TValueObject> WhenValid<TValueObject>(
             Func<T, TValueObject> createValueObjectFunc)
         {
+            var context = new ValidationContext();
+
             while (_validators.TryDequeue(out var validator))
             {
-                var validationResult = validator.Validate(Value);
-                if (!validationResult.IsValid)
+                validator.Validate(Value, context);
+                // TODO: Introduce cascade policy, and stop reading public Failures array
+                if (context.Failures.Any())
                 {
-                    return Result<TValueObject>.Failure(validationResult.Error!);
+                    return Result<TValueObject>.Failure(context.Failures.ToArray());
                 }
             }
 
@@ -94,12 +144,15 @@
 
         public async Task<Result<TValueObject>> WhenValidAsync<TValueObject>(Func<T, TValueObject> createValueObjectFunc)
         {
+            var context = new ValidationContext();
+
             while (_validators.TryDequeue(out var validator))
             {
-                var validationResult = await validator.ValidateAsync(Value);
-                if (!validationResult.IsValid)
+                await validator.ValidateAsync(Value, context);
+                // TODO: Introduce cascade policy, and stop reading public Failures array
+                if (context.Failures.Any())
                 {
-                    return Result<TValueObject>.Failure(validationResult.Error!);
+                    return Result<TValueObject>.Failure(context.Failures.ToArray());
                 }
             }
 
@@ -145,12 +198,12 @@
 
     public interface IPropertyValidator<in T>
     {
-        PropertyValidationResult Validate(T value);
+        void Validate(T value, IValidationContext context);
     }
 
     public interface IAsyncPropertyValidator<in T>
     {
-        Task<PropertyValidationResult> ValidateAsync(T value);
+        Task ValidateAsync(T value, IValidationContext context);
     }
 
     internal interface IPropertyValidatorInternal<in T> :
@@ -174,85 +227,66 @@
             _asyncPropertyValidator = asyncPropertyValidator;
         }
 
-        public PropertyValidationResult Validate(T value)
+        public void Validate(T value, IValidationContext context)
         {
             if (_propertyValidator is not null)
             {
-                return _propertyValidator.Validate(value);
+                _propertyValidator.Validate(value, context);
+                return;
             }
 
             if (_asyncPropertyValidator is not null)
             {
-                return _asyncPropertyValidator
-                    .ValidateAsync(value)
+                _asyncPropertyValidator
+                    .ValidateAsync(value, context)
                     .ConfigureAwait(false)
                     .GetAwaiter()
                     .GetResult();
+                return;
             }
-
 
             throw new NotImplementedException();
         }
 
-        public Task<PropertyValidationResult> ValidateAsync(T value)
+        public async Task ValidateAsync(T value, IValidationContext context)
         {
-            if (_asyncPropertyValidator is not null)
-            {
-                return _asyncPropertyValidator.ValidateAsync(value);
-            }
-
             if (_propertyValidator is not null)
             {
-                var syncValidationResult = _propertyValidator.Validate(value);
-                return Task.FromResult(syncValidationResult);
+                _propertyValidator.Validate(value, context);
+                return;
+            }
+
+            if (_asyncPropertyValidator is not null)
+            {
+                await _asyncPropertyValidator.ValidateAsync(value, context);
+                return;
             }
 
             throw new NotImplementedException();
         }
     }
 
-    public record PropertyValidationResult
+    public interface IValidationContext
     {
-        public bool IsValid { get; }
-        public IValidationFailure? Error { get; }
+        void AddFailure(IValidationFailure failure);
+    }
 
-        private PropertyValidationResult(bool isValid, IValidationFailure? failure)
-        {
-            IsValid = isValid;
-            Error = failure;
-        }
+    internal class ValidationContext : IValidationContext
+    {
+        public readonly ICollection<IValidationFailure> Failures = new List<IValidationFailure>();
 
-        public static PropertyValidationResult Success()
-            => new(true, null);
-
-        public static PropertyValidationResult Failure(IValidationFailure failure)
-            => new(
-                false,
-                failure ?? throw new ArgumentNullException(nameof(failure)));
+        public void AddFailure(IValidationFailure failure)
+            => Failures.Add(failure);
     }
 
     public class NotNullValidator<T> : IPropertyValidator<T>
     {
-        public bool TryValidate(T value, out IValidationFailure? failure)
-        {
-            failure = default;
-            if (value is null)
-            {
-                failure = new ValueNullFailure();
-                return false;
-            }
-
-            return true;
-        }
-
-        public PropertyValidationResult Validate(T value)
+        public void Validate(T value, IValidationContext context)
         {
             if (value is null)
             {
-                return PropertyValidationResult.Failure(new ValueNullFailure());
+                context.AddFailure(new ValueNullFailure());
             }
-
-            return PropertyValidationResult.Success();
         }
     }
 
@@ -267,16 +301,14 @@
             _maxLength = maxLength;
         }
 
-        public PropertyValidationResult Validate(string value)
+        public void Validate(string value, IValidationContext context)
         {
             if (value.Length < _minLength ||
                 value.Length > _maxLength)
             {
                 var failure = new StringLengthFailure(_minLength, _maxLength, value.Length);
-                return PropertyValidationResult.Failure(failure);
+                context.AddFailure(failure);
             }
-
-            return PropertyValidationResult.Success();
         }
     }
 
@@ -289,10 +321,9 @@
             _delayMs = delayMs;
         }
 
-        public async Task<PropertyValidationResult> ValidateAsync(T value)
+        public async Task ValidateAsync(T value, IValidationContext context)
         {
             await Task.Delay(_delayMs);
-            return PropertyValidationResult.Success();
         }
     }
 
@@ -306,6 +337,7 @@
 
     public class Result<T>
     {
+        public IValidationFailure[] Failures { get; }
         private readonly T? _value;
         public T Value
         {
@@ -321,24 +353,25 @@
             }
         }
 
-        public IValidationFailure? Error { get; }
-
-        public Result(T value)
+        private Result(T value)
         {
             _value = value;
-            Error = null;
+            Failures = Array.Empty<IValidationFailure>();
         }
 
-        public Result(IValidationFailure validationError)
+        private Result(IValidationFailure[] failures)
         {
-            Error = validationError ?? throw new ArgumentNullException(nameof(validationError));
+            failures = failures ?? throw new ArgumentNullException(nameof(failures));
+            if (!failures.Any()) throw new ArgumentException("Failures collection is empty");
+
+            Failures = failures;
             _value = default;
         }
 
         public bool TryGet(out T? value)
         {
             value = default;
-            if (Error is not null)
+            if (Failures.Any())
             {
                 return false;
             }
@@ -352,29 +385,69 @@
             return new Result<T>(value);
         }
 
-        public static Result<T> Failure(IValidationFailure failure)
+        public static Result<T> Failure(IValidationFailure[] failures)
         {
-            return new Result<T>(failure);
+            return new Result<T>(failures);
         }
     }
 
     public class GroupResult<T>
     {
-        private readonly IDictionary<string, IEnumerable<IValidationFailure>> _validationErrors;
+        private readonly IDictionary<int, IValidationFailure[]> _validationFailures;
+        private readonly T? _value;
 
-        public GroupResult(T value)
+        public T Value
         {
+            get
+            {
+                if (!TryGet(out var value))
+                {
+                    // TODO: Implement proper result..
+                    throw new Exception("err");
+                }
+
+                return value!;
+            }
         }
 
-        public GroupResult(IDictionary<string, IEnumerable<IValidationFailure>> validationErrors)
+        private GroupResult(T value)
         {
-            _validationErrors = validationErrors;
+            _validationFailures = new Dictionary<int, IValidationFailure[]>();
+            _value = value;
+        }
+
+        private GroupResult(IDictionary<int, IValidationFailure[]> validationFailures)
+        {
+            _validationFailures = validationFailures;
+            _value = default;
+        }
+
+        public bool TryGet(out T? value)
+        {
+            value = default;
+            if (_validationFailures.Any())
+            {
+                return false;
+            }
+
+            value = _value!;
+            return true;
+        }
+
+        public static GroupResult<T> Success(T value)
+        {
+            return new GroupResult<T>(value);
+        }
+
+        public static GroupResult<T> Failure(IDictionary<int, IValidationFailure[]> validationFailures)
+        {
+            return new GroupResult<T>(validationFailures);
         }
     }
 
     public static class ValidatorExtensions
     {
-        public static IValidatorBuilder<T> NotNull<T>(this IValidatorBuilder<T> validatorBuilder)
+        public static IValidatorBuilder<T> NotNull<T>(this IValidatorBuilder<T?> validatorBuilder)
         {
             return validatorBuilder.AddValidator(new NotNullValidator<T>());
         }
