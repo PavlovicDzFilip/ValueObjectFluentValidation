@@ -445,6 +445,60 @@
         }
     }
 
+    public class ValidationResult<T>
+    {
+        private readonly IDictionary<string, IValidationFailure[]> _validationFailures;
+        private readonly T? _value;
+
+        public T Value
+        {
+            get
+            {
+                if (!TryGet(out var value))
+                {
+                    // TODO: Implement proper result..
+                    throw new Exception("err");
+                }
+
+                return value!;
+            }
+        }
+
+        private ValidationResult(T value)
+        {
+            _validationFailures = new Dictionary<string, IValidationFailure[]>();
+            _value = value;
+        }
+
+        private ValidationResult(IDictionary<string, IValidationFailure[]> validationFailures)
+        {
+            _validationFailures = validationFailures;
+            _value = default;
+        }
+
+        public bool TryGet(out T? value)
+        {
+            value = default;
+            if (_validationFailures.Any())
+            {
+                return false;
+            }
+
+            value = _value!;
+            return true;
+        }
+
+        public static ValidationResult<T> Success(T value)
+        {
+            return new ValidationResult<T>(value);
+        }
+
+        public static ValidationResult<T> Failure(IDictionary<string, IValidationFailure[]> validationFailures)
+        {
+            return new ValidationResult<T>(validationFailures);
+        }
+    }
+
     public static class ValidatorExtensions
     {
         public static IValidatorBuilder<T> NotNull<T>(this IValidatorBuilder<T?> validatorBuilder)
@@ -467,6 +521,26 @@
     {
         public static IRequestValidatorBuilder<T> For<T>(T request)
         {
+            return new RequestValidatorBuilder<T>(request);
+        }
+    }
+
+    internal class RequestValidatorBuilder<T> : IRequestValidatorBuilder<T>
+    {
+        private readonly T _request;
+
+        public RequestValidatorBuilder(T request)
+        {
+            _request = request;
+        }
+
+        public Result<TValidRequest> WhenValid<T1, T2, TValidRequest>(Func<T1, T2, TValidRequest> func)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IRequestGroupValidator<T1, T2> Group<T1, T2>(IRule<T, T1> rule1, IRule<T, T2> rule2)
+        {
             throw new NotImplementedException();
         }
     }
@@ -475,25 +549,20 @@
     {
         Result<TValidRequest> WhenValid<T1, T2, TValidRequest>(Func<T1, T2, TValidRequest> func);
 
-        IGroupValidator<T1, T2> Group<T1, T2>(
+        IRequestGroupValidator<T1, T2> Group<T1, T2>(
             IRule<T, T1> rule1,
             IRule<T, T2> rule2);
-
-        IGroupValidator<T1, T2, T3> Group<T1, T2, T3>(
-            IRule<T, T1> rule1,
-            IRule<T, T2> rule2,
-            IRule<T, T3> rule3);
-
-        IGroupValidator<T1, T2, T3, T4> Group<T1, T2, T3, T4>(
-            IRule<T, T1> rule1,
-            IRule<T, T2> rule2,
-            IRule<T, T3> rule3,
-            IRule<T, T4> rule4);
     }
 
-    public interface IRequestValidator<T, TValid>
+    public interface IRequestGroupValidator<T1, T2>
     {
-        Result<TValid> Validate(T value);
+        ValidationResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+        Task<ValidationResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+    }
+
+    public interface IRequestValidator<in T, TValid>
+    {
+        ValidationResult<TValid> Validate(T value);
     }
 
     public interface ISingleRule<T, TValid> : IRule<T, TValid>
@@ -513,7 +582,7 @@
 
     public abstract class AbstractRequestValidator<T, TValid> : IRequestValidator<T, TValid>
     {
-        public abstract Result<TValid> Validate(T value);
+        public abstract ValidationResult<TValid> Validate(T value);
 
         public ISingleRule<T, TValueObject> Rule<TProperty, TValueObject>(
             Func<T, TProperty> func,
@@ -525,7 +594,7 @@
         public IGroupRule<T, TValueObject> Rule<TProperty1, TProperty2, TValueObject>(
             Func<T, TProperty1> prop1Selector,
             Func<T, TProperty2> prop2Selector,
-            Func<TProperty1, TProperty2, Result<TValueObject>> valueObjectFunc)
+            Func<TProperty1, TProperty2, GroupResult<TValueObject>> valueObjectFunc)
         {
             throw new NotImplementedException();
         }
