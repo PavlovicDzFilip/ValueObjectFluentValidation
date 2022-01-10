@@ -3,7 +3,9 @@ using ValueObjectFluentValidation.Util;
 
 namespace ValueObjectFluentValidation;
 
-internal class ValidatorWrapper<T> : Either<IAsyncValidator<T>, IValidator<T>>, IValidatorInternal<T>
+internal class ValidatorWrapper<T> : 
+    Either<IAsyncValidator<T>, IValidator<T>>, 
+    IValidatorInternal<T>
 {
     public ValidatorWrapper(IValidator<T> syncValidator) : base(syncValidator)
     {

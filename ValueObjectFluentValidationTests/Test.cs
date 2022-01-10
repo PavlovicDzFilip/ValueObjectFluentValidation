@@ -14,7 +14,7 @@ namespace ValueObjectFluentValidationTests
 
     //    public class RequestValidatorTransformator : AbstractRequestValidator<Command, ValidCommand>
     //    {
-    //        public override SingleResult<ValidCommand> Validate(Command command)
+    //        public override SingleResult<ValidCommand> TryCreate(Command command)
     //        {
     //            var r3 = Rule(x => x.NonNullStr, SingleResult<string>.Success);
     //            return RequestValidator.For(command)
@@ -27,7 +27,7 @@ namespace ValueObjectFluentValidationTests
 
     //    public class AddressDtoValidator : AbstractRequestValidator<AddressDto, Address>
     //    {
-    //        public override SingleResult<Address> Validate(AddressDto value)
+    //        public override SingleResult<Address> TryCreate(AddressDto value)
     //        {
     //            return RequestValidator
     //                .For(value)

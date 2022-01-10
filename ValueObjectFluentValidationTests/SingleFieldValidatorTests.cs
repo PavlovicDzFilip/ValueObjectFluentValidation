@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Shouldly;
 using ValueObjectFluentValidation;
 using ValueObjectFluentValidation.Single;
+using ValueObjectFluentValidation.Validators;
 using Xunit;
 
 namespace ValueObjectFluentValidationTests;
