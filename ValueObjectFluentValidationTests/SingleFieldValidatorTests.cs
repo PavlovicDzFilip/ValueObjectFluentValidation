@@ -2,11 +2,12 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Shouldly;
 using ValueObjectFluentValidation;
+using ValueObjectFluentValidation.Single;
 using Xunit;
 
 namespace ValueObjectFluentValidationTests;
 
-public class SingleFieldValidator
+public class SingleFieldValidatorTests
 {
     [Fact]
     public void WithNoRules_IsValid()
@@ -59,7 +60,7 @@ public class SingleFieldValidator
             .ShouldBeFalse();
 
         valueObject.ShouldBeNull();
-        result.Failures
+        result.Failure
             .ShouldHaveSingleItem()
             .ShouldBeOfType<ValueNullFailure>();
     }
@@ -81,7 +82,7 @@ public class SingleFieldValidator
             .ShouldBeFalse();
 
         valueObject.ShouldBeNull();
-        var failure = result.Failures
+        var failure = result.Failure
             .ShouldHaveSingleItem()
             .ShouldBeOfType<StringLengthFailure>();
         failure.MinLength.ShouldBe(3);
@@ -143,14 +144,14 @@ public class SingleFieldValidator
             Value = value;
         }
 
-        public static Result<SingleFieldValueObject> TryCreateWithNoRules(string? value)
+        public static SingleResult<SingleFieldValueObject> TryCreateWithNoRules(string? value)
         {
             return Validator
                 .For(value)
                 .WhenValid(s => new SingleFieldValueObject(s));
         }
 
-        public static Result<SingleFieldValueObject> TryCreateWithNotNullRule(string? value)
+        public static SingleResult<SingleFieldValueObject> TryCreateWithNotNullRule(string? value)
         {
             return Validator
                 .For(value)
@@ -158,7 +159,7 @@ public class SingleFieldValidator
                 .WhenValid(s => new SingleFieldValueObject(s));
         }
 
-        public static Result<SingleFieldValueObject> TryCreateWithMultipleRules(string? value)
+        public static SingleResult<SingleFieldValueObject> TryCreateWithMultipleRules(string? value)
         {
             return Validator
                 .For(value)
@@ -167,7 +168,7 @@ public class SingleFieldValidator
                 .WhenValid(s => new SingleFieldValueObject(s));
         }
 
-        public static Task<Result<SingleFieldValueObject>> TryCreateWithMultipleRulesAsync(string? value)
+        public static Task<SingleResult<SingleFieldValueObject>> TryCreateWithMultipleRulesAsync(string? value)
         {
             return Validator
                 .For(value)
@@ -177,7 +178,7 @@ public class SingleFieldValidator
                 .WhenValidAsync(s => new SingleFieldValueObject(s));
         }
 
-        public static Result<SingleFieldValueObject> TryCreateWithMultipleRulesSync(string? value)
+        public static SingleResult<SingleFieldValueObject> TryCreateWithMultipleRulesSync(string? value)
         {
             return Validator
                 .For(value)

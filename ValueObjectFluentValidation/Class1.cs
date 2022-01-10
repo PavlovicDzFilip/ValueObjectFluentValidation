@@ -1,80 +1,53 @@
-﻿namespace ValueObjectFluentValidation
+﻿using ValueObjectFluentValidation.Single;
+
+
+namespace ValueObjectFluentValidation
 {
-    public class Validator
-    {
-        public static IValidatorBuilderInitial<T> For<T>(T value)
-        {
-            return new ValidatorBuilderInitial<T>(value);
-        }
+    //internal class GroupValidator<T1, T2> : IGroupValidator<T1, T2>
+    //{
+    //    private readonly ISinglePropertyValidatorBuilder<T1> _firstSinglePropertyValidator;
+    //    private readonly ISinglePropertyValidatorBuilder<T2> _secondSinglePropertyValidator;
 
-        public static IGroupValidator<T1, T2> Group<T1, T2>(
-            IValidatorBuilder<T1> firstValidator,
-            IValidatorBuilder<T2> secondValidator)
-        {
-            return new GroupValidator<T1, T2>(firstValidator, secondValidator);
-        }
+    //    public GroupValidator(
+    //        ISinglePropertyValidatorBuilder<T1> firstSinglePropertyValidator,
+    //        ISinglePropertyValidatorBuilder<T2> secondSinglePropertyValidator)
+    //    {
+    //        _firstSinglePropertyValidator = firstSinglePropertyValidator;
+    //        _secondSinglePropertyValidator = secondSinglePropertyValidator;
+    //    }
 
-        private class ValidatorBuilderInitial<T> :
-            ValidationBuilder<T>,
-            IValidatorBuilderInitial<T>
-        {
-            public ValidatorBuilderInitial(T value) : base(value)
-            {
-            }
+    //    public GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
+    //    {
+    //        var failuresByValidatorIndex = new Dictionary<int, IValidationFailure[]>();
 
-            public IValidatorBuilder<TTransformed> Transform<TTransformed>(Func<T, TTransformed> transformFunc)
-            {
-                var transformed = transformFunc(Value);
-                return new ValidationBuilder<TTransformed>(transformed);
-            }
-        }
-    }
+    //        var validators = new object[] { _firstSinglePropertyValidator, _secondSinglePropertyValidator };
+    //        var v1 = _firstSinglePropertyValidator.WhenValid(w => w);
+    //        var v2 = _secondSinglePropertyValidator.WhenValid(w => w);
 
-    internal class GroupValidator<T1, T2> : IGroupValidator<T1, T2>
-    {
-        private readonly IValidatorBuilder<T1> _firstValidator;
-        private readonly IValidatorBuilder<T2> _secondValidator;
+    //        if (!v1.TryGet(out var v1Value))
+    //        {
+    //            failuresByValidatorIndex.AddFailure(0, v1.Failures);
+    //        }
 
-        public GroupValidator(
-            IValidatorBuilder<T1> firstValidator,
-            IValidatorBuilder<T2> secondValidator)
-        {
-            _firstValidator = firstValidator;
-            _secondValidator = secondValidator;
-        }
+    //        if (!v2.TryGet(out var v2Value))
+    //        {
+    //            failuresByValidatorIndex.AddFailure(1, v2.Failures);
+    //        }
 
-        public GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
-        {
-            var failuresByValidatorIndex = new Dictionary<int, IValidationFailure[]>();
+    //        if (failuresByValidatorIndex.Any())
+    //        {
+    //            return GroupResult<TValueObject>.Failure(failuresByValidatorIndex);
+    //        }
 
-            var validators = new object[] { _firstValidator, _secondValidator };
-            var v1 = _firstValidator.WhenValid(w => w);
-            var v2 = _secondValidator.WhenValid(w => w);
+    //        var valueObject = createValueObjectFunc.Invoke(v1Value!, v2Value!);
+    //        return GroupResult<TValueObject>.Success(valueObject);
+    //    }
 
-            if (!v1.TryGet(out var v1Value))
-            {
-                failuresByValidatorIndex.Add(0, v1.Failures);
-            }
-
-            if (!v2.TryGet(out var v2Value))
-            {
-                failuresByValidatorIndex.Add(1, v2.Failures);
-            }
-
-            if (failuresByValidatorIndex.Any())
-            {
-                return GroupResult<TValueObject>.Failure(failuresByValidatorIndex);
-            }
-
-            var valueObject = createValueObjectFunc.Invoke(v1Value!, v2Value!);
-            return GroupResult<TValueObject>.Success(valueObject);
-        }
-
-        public Task<GroupResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
-        {
-            throw new NotImplementedException();
-        }
-    }
+    //    public Task<GroupResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
+    //    {
+    //        throw new NotImplementedException();
+    //    }
+    //}
 
     public class FailureNotSetException : Exception
     {
@@ -84,204 +57,38 @@
         }
     }
 
-    public interface IGroupValidator<out T1, out T2>
-    {
-        GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
-        Task<GroupResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
-    }
-
-    public interface IGroupValidator<T1, T2, T3>
-    {
-        GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, TValueObject> func);
-    }
-
-    public interface IGroupValidator<T1, T2, T3, T4>
-    {
-        Result<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, T4, TValueObject> func);
-    }
-
-    internal class ValidationBuilder<T> : IValidatorBuilder<T>
-    {
-        private protected readonly T Value;
-        private readonly Queue<IPropertyValidatorInternal<T>> _validators;
-
-        public ValidationBuilder(T value)
-        {
-            Value = value;
-            _validators = new Queue<IPropertyValidatorInternal<T>>();
-        }
-
-        public IValidatorBuilder<T> AddValidator(IPropertyValidator<T> propertyValidator)
-        {
-            _validators.Enqueue(new PropertyValidatorWrapper<T>(propertyValidator));
-            return this;
-        }
-
-        public IValidatorBuilder<T> AddValidator(IAsyncPropertyValidator<T> propertyValidator)
-        {
-            _validators.Enqueue(new PropertyValidatorWrapper<T>(propertyValidator));
-            return this;
-        }
-
-        public Result<TValueObject> WhenValid<TValueObject>(
-            Func<T, TValueObject> createValueObjectFunc)
-        {
-            var context = new ValidationContext();
-
-            while (_validators.TryDequeue(out var validator))
-            {
-                validator.Validate(Value, context);
-                // TODO: Introduce cascade policy, and stop reading public Failures array
-                if (context.Failures.Any())
-                {
-                    return Result<TValueObject>.Failure(context.Failures.ToArray());
-                }
-            }
-
-            var valueObject = createValueObjectFunc(Value);
-            return Result<TValueObject>.Success(valueObject);
-        }
-
-        public async Task<Result<TValueObject>> WhenValidAsync<TValueObject>(Func<T, TValueObject> createValueObjectFunc)
-        {
-            var context = new ValidationContext();
-
-            while (_validators.TryDequeue(out var validator))
-            {
-                await validator.ValidateAsync(Value, context);
-                // TODO: Introduce cascade policy, and stop reading public Failures array
-                if (context.Failures.Any())
-                {
-                    return Result<TValueObject>.Failure(context.Failures.ToArray());
-                }
-            }
-
-            var valueObject = createValueObjectFunc(Value);
-            return Result<TValueObject>.Success(valueObject);
-        }
-    }
-
-    public interface IValidationFailure
-    {
-
-    }
-
-    public interface IValidatorBuilder<out T>
-    {
-        IValidatorBuilder<T> AddValidator(IPropertyValidator<T> propertyValidator);
-        IValidatorBuilder<T> AddValidator(IAsyncPropertyValidator<T> propertyValidator);
-
-        public Result<TValueObject> WhenValid<TValueObject>(
-            Func<T, TValueObject> createValueObjectFunc);
-
-        public Task<Result<TValueObject>> WhenValidAsync<TValueObject>(
-            Func<T, TValueObject> createValueObjectFunc);
-    }
-
-    //public interface IValidatorBuilder<TInitial>
+    //public interface IGroupValidator<out T1, out T2>
     //{
-    //    IValidatorBuilder<TInitial> AddValidator(IPropertyValidator<TInitial> propertyValidator);
+    //    GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+    //    Task<GroupResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+    //}
+
+    //public interface IGroupValidator<T1, T2, T3>
+    //{
+    //    GroupResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, TValueObject> func);
+    //}
+
+    //public interface IGroupValidator<T1, T2, T3, T4>
+    //{
+    //    SingleResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, T3, T4, TValueObject> func);
+    //}
+
+    //public interface ISinglePropertyValidatorBuilder<TInitial>
+    //{
+    //    ISinglePropertyValidatorBuilder<TInitial> AddValidator(IValidator<TInitial> validator);
 
     //    public IValidator<TInitial, TValueObject> WhenValid<TValueObject>(
     //        Func<TInitial, TValueObject> createValueObjectFunc);
     //}
 
-    public interface IValidator<TInitial, TValueObject>
+    //public interface IValidator<TInitial, TValueObject>
+    //{
+    //    SingleResult<TValueObject> Validate();
+    //}
+    
+    public class NotNullValidator<T> : IValidator<T>
     {
-        Result<TValueObject> Validate();
-    }
-
-    public interface IValidatorBuilderInitial<T> : IValidatorBuilder<T>
-    {
-        IValidatorBuilder<TTransformed> Transform<TTransformed>(Func<T, TTransformed> transformFunc);
-    }
-
-    public interface IPropertyValidator<in T>
-    {
-        void Validate(T value, IValidationContext context);
-    }
-
-    public interface IAsyncPropertyValidator<in T>
-    {
-        Task ValidateAsync(T value, IValidationContext context);
-    }
-
-    internal interface IPropertyValidatorInternal<in T> :
-        IPropertyValidator<T>,
-        IAsyncPropertyValidator<T>
-    {
-    }
-
-    internal record PropertyValidatorWrapper<T> : IPropertyValidatorInternal<T>
-    {
-        private readonly IAsyncPropertyValidator<T>? _asyncPropertyValidator;
-        private readonly IPropertyValidator<T>? _propertyValidator;
-
-        public PropertyValidatorWrapper(IPropertyValidator<T> propertyValidator)
-        {
-            _propertyValidator = propertyValidator;
-        }
-
-        public PropertyValidatorWrapper(IAsyncPropertyValidator<T> asyncPropertyValidator)
-        {
-            _asyncPropertyValidator = asyncPropertyValidator;
-        }
-
-        public void Validate(T value, IValidationContext context)
-        {
-            if (_propertyValidator is not null)
-            {
-                _propertyValidator.Validate(value, context);
-                return;
-            }
-
-            if (_asyncPropertyValidator is not null)
-            {
-                _asyncPropertyValidator
-                    .ValidateAsync(value, context)
-                    .ConfigureAwait(false)
-                    .GetAwaiter()
-                    .GetResult();
-                return;
-            }
-
-            throw new NotImplementedException();
-        }
-
-        public async Task ValidateAsync(T value, IValidationContext context)
-        {
-            if (_propertyValidator is not null)
-            {
-                _propertyValidator.Validate(value, context);
-                return;
-            }
-
-            if (_asyncPropertyValidator is not null)
-            {
-                await _asyncPropertyValidator.ValidateAsync(value, context);
-                return;
-            }
-
-            throw new NotImplementedException();
-        }
-    }
-
-    public interface IValidationContext
-    {
-        void AddFailure(IValidationFailure failure);
-    }
-
-    internal class ValidationContext : IValidationContext
-    {
-        public readonly ICollection<IValidationFailure> Failures = new List<IValidationFailure>();
-
-        public void AddFailure(IValidationFailure failure)
-            => Failures.Add(failure);
-    }
-
-    public class NotNullValidator<T> : IPropertyValidator<T>
-    {
-        public void Validate(T value, IValidationContext context)
+        public void Validate(T value, IValidationFailureCollection context)
         {
             if (value is null)
             {
@@ -290,7 +97,7 @@
         }
     }
 
-    public class StringLengthValidator : IPropertyValidator<string>
+    public class StringLengthValidator : IValidator<string>
     {
         private readonly int _minLength;
         private readonly int _maxLength;
@@ -301,7 +108,7 @@
             _maxLength = maxLength;
         }
 
-        public void Validate(string value, IValidationContext context)
+        public void Validate(string value, IValidationFailureCollection context)
         {
             if (value.Length < _minLength ||
                 value.Length > _maxLength)
@@ -312,7 +119,7 @@
         }
     }
 
-    public class AsyncDelayedValidator<T> : IAsyncPropertyValidator<T>
+    public class AsyncDelayedValidator<T> : IAsyncValidator<T>
     {
         private readonly int _delayMs;
 
@@ -321,7 +128,7 @@
             _delayMs = delayMs;
         }
 
-        public async Task ValidateAsync(T value, IValidationContext context)
+        public async Task ValidateAsync(T value, IValidationFailureCollection context)
         {
             await Task.Delay(_delayMs);
         }
@@ -335,268 +142,306 @@
     {
     }
 
-    public class Result<T>
+    public class InvalidResultException : Exception
     {
-        public IValidationFailure[] Failures { get; }
-        private readonly T? _value;
-        public T Value
+        public object Failure { get; }
+
+        public InvalidResultException(object failure)
         {
-            get
-            {
-                if (!TryGet(out var value))
-                {
-                    // TODO: Implement proper result..
-                    throw new Exception("err");
-                }
-
-                return value!;
-            }
-        }
-
-        private Result(T value)
-        {
-            _value = value;
-            Failures = Array.Empty<IValidationFailure>();
-        }
-
-        private Result(IValidationFailure[] failures)
-        {
-            failures = failures ?? throw new ArgumentNullException(nameof(failures));
-            if (!failures.Any()) throw new ArgumentException("Failures collection is empty");
-
-            Failures = failures;
-            _value = default;
-        }
-
-        public bool TryGet(out T? value)
-        {
-            value = default;
-            if (Failures.Any())
-            {
-                return false;
-            }
-
-            value = _value!;
-            return true;
-        }
-
-        public static Result<T> Success(T value)
-        {
-            return new Result<T>(value);
-        }
-
-        public static Result<T> Failure(IValidationFailure[] failures)
-        {
-            return new Result<T>(failures);
+            Failure = failure;
         }
     }
 
-    public class GroupResult<T>
-    {
-        private readonly IDictionary<int, IValidationFailure[]> _validationFailures;
-        private readonly T? _value;
+    //public class GroupResult<T>
+    //{
+    //    private readonly IDictionary<int, IValidationFailure[]> _validationFailures;
+    //    private readonly T? _value;
 
-        public T Value
-        {
-            get
-            {
-                if (!TryGet(out var value))
-                {
-                    // TODO: Implement proper result..
-                    throw new Exception("err");
-                }
+    //    public T Value
+    //    {
+    //        get
+    //        {
+    //            if (!TryGet(out var value))
+    //            {
+    //                // TODO: Implement proper result..
+    //                throw new Exception("err");
+    //            }
 
-                return value!;
-            }
-        }
+    //            return value!;
+    //        }
+    //    }
 
-        private GroupResult(T value)
-        {
-            _validationFailures = new Dictionary<int, IValidationFailure[]>();
-            _value = value;
-        }
+    //    private GroupResult(T value)
+    //    {
+    //        _validationFailures = new Dictionary<int, IValidationFailure[]>();
+    //        _value = value;
+    //    }
 
-        private GroupResult(IDictionary<int, IValidationFailure[]> validationFailures)
-        {
-            _validationFailures = validationFailures;
-            _value = default;
-        }
+    //    private GroupResult(IDictionary<int, IValidationFailure[]> validationFailures)
+    //    {
+    //        _validationFailures = validationFailures;
+    //        _value = default;
+    //    }
 
-        public bool TryGet(out T? value)
-        {
-            value = default;
-            if (_validationFailures.Any())
-            {
-                return false;
-            }
+    //    public bool TryGet(out T? value)
+    //    {
+    //        value = default;
+    //        if (_validationFailures.Any())
+    //        {
+    //            return false;
+    //        }
 
-            value = _value!;
-            return true;
-        }
+    //        value = _value!;
+    //        return true;
+    //    }
 
-        public static GroupResult<T> Success(T value)
-        {
-            return new GroupResult<T>(value);
-        }
+    //    public static GroupResult<T> Success(T value)
+    //    {
+    //        return new GroupResult<T>(value);
+    //    }
 
-        public static GroupResult<T> Failure(IDictionary<int, IValidationFailure[]> validationFailures)
-        {
-            return new GroupResult<T>(validationFailures);
-        }
-    }
+    //    public static GroupResult<T> Failure(IDictionary<int, IValidationFailure[]> validationFailures)
+    //    {
+    //        return new GroupResult<T>(validationFailures);
+    //    }
+    //}
 
-    public class ValidationResult<T>
-    {
-        private readonly IDictionary<string, IValidationFailure[]> _validationFailures;
-        private readonly T? _value;
+    //public class ValidationResult<T>
+    //{
+    //    private readonly IDictionary<string, IEnumerable<IValidationFailure>> _validationFailures;
+    //    private readonly T? _value;
 
-        public T Value
-        {
-            get
-            {
-                if (!TryGet(out var value))
-                {
-                    // TODO: Implement proper result..
-                    throw new Exception("err");
-                }
+    //    public T Value
+    //    {
+    //        get
+    //        {
+    //            if (!TryGet(out var value))
+    //            {
+    //                // TODO: Implement proper result..
+    //                throw new Exception("err");
+    //            }
 
-                return value!;
-            }
-        }
+    //            return value!;
+    //        }
+    //    }
 
-        private ValidationResult(T value)
-        {
-            _validationFailures = new Dictionary<string, IValidationFailure[]>();
-            _value = value;
-        }
+    //    private ValidationResult(T value)
+    //    {
+    //        _validationFailures = new Dictionary<string, IEnumerable<IValidationFailure>>();
+    //        _value = value;
+    //    }
 
-        private ValidationResult(IDictionary<string, IValidationFailure[]> validationFailures)
-        {
-            _validationFailures = validationFailures;
-            _value = default;
-        }
+    //    private ValidationResult(IDictionary<string, IEnumerable<IValidationFailure>> validationFailures)
+    //    {
+    //        _validationFailures = validationFailures;
+    //        _value = default;
+    //    }
 
-        public bool TryGet(out T? value)
-        {
-            value = default;
-            if (_validationFailures.Any())
-            {
-                return false;
-            }
+    //    public bool TryGet(out T? value)
+    //    {
+    //        value = default;
+    //        if (_validationFailures.Any())
+    //        {
+    //            return false;
+    //        }
 
-            value = _value!;
-            return true;
-        }
+    //        value = _value!;
+    //        return true;
+    //    }
 
-        public static ValidationResult<T> Success(T value)
-        {
-            return new ValidationResult<T>(value);
-        }
+    //    public static ValidationResult<T> Success(T value)
+    //    {
+    //        return new ValidationResult<T>(value);
+    //    }
 
-        public static ValidationResult<T> Failure(IDictionary<string, IValidationFailure[]> validationFailures)
-        {
-            return new ValidationResult<T>(validationFailures);
-        }
-    }
+    //    public static ValidationResult<T> Failure(IDictionary<string, IEnumerable<IValidationFailure>> validationFailures)
+    //    {
+    //        return new ValidationResult<T>(validationFailures);
+    //    }
+    //}
 
     public static class ValidatorExtensions
     {
-        public static IValidatorBuilder<T> NotNull<T>(this IValidatorBuilder<T?> validatorBuilder)
+        public static ISinglePropertyValidatorBuilder<T> NotNull<T>(this ISinglePropertyValidatorBuilder<T?> singlePropertyValidatorBuilder)
         {
-            return validatorBuilder.AddValidator(new NotNullValidator<T>());
+            return singlePropertyValidatorBuilder.AddValidator(new NotNullValidator<T>());
         }
 
-        public static IValidatorBuilder<string> Length(this IValidatorBuilder<string> validatorBuilder, int minLength, int maxLength)
+        public static ISinglePropertyValidatorBuilder<string> Length(this ISinglePropertyValidatorBuilder<string> singlePropertyValidatorBuilder, int minLength, int maxLength)
         {
-            return validatorBuilder.AddValidator(new StringLengthValidator(minLength, maxLength));
+            return singlePropertyValidatorBuilder.AddValidator(new StringLengthValidator(minLength, maxLength));
         }
 
-        public static IValidatorBuilder<T> ValidAsync<T>(this IValidatorBuilder<T> validatorBuilder, int delayMs)
+        public static ISinglePropertyValidatorBuilder<T> ValidAsync<T>(this ISinglePropertyValidatorBuilder<T> singlePropertyValidatorBuilder, int delayMs)
         {
-            return validatorBuilder.AddValidator(new AsyncDelayedValidator<T>(delayMs));
-        }
-    }
-
-    public static class RequestValidator
-    {
-        public static IRequestValidatorBuilder<T> For<T>(T request)
-        {
-            return new RequestValidatorBuilder<T>(request);
+            return singlePropertyValidatorBuilder.AddValidator(new AsyncDelayedValidator<T>(delayMs));
         }
     }
 
-    internal class RequestValidatorBuilder<T> : IRequestValidatorBuilder<T>
-    {
-        private readonly T _request;
+    //public static class RequestValidator
+    //{
+    //    public static IRequestValidatorBuilder<T> For<T>(T request)
+    //    {
+    //        return new RequestValidatorBuilder<T>(request);
+    //    }
+    //}
 
-        public RequestValidatorBuilder(T request)
-        {
-            _request = request;
-        }
+    //internal class RequestValidatorBuilder<T> : IRequestValidatorBuilder<T>
+    //{
+    //    private readonly T _request;
 
-        public Result<TValidRequest> WhenValid<T1, T2, TValidRequest>(Func<T1, T2, TValidRequest> func)
-        {
-            throw new NotImplementedException();
-        }
+    //    public RequestValidatorBuilder(T request)
+    //    {
+    //        _request = request;
+    //    }
 
-        public IRequestGroupValidator<T1, T2> Group<T1, T2>(IRule<T, T1> rule1, IRule<T, T2> rule2)
-        {
-            throw new NotImplementedException();
-        }
-    }
+    //    public IRequestGroupValidator<T1, T2> Group<T1, T2>(params IRule<T, T1>[] rules)
+    //    {
+    //        return new RequestGroupValidator<T, T1, T2>(_request, rules.Cast<IRule<T, object>>().ToArray());
 
-    public interface IRequestValidatorBuilder<T>
-    {
-        Result<TValidRequest> WhenValid<T1, T2, TValidRequest>(Func<T1, T2, TValidRequest> func);
+    //    }
 
-        IRequestGroupValidator<T1, T2> Group<T1, T2>(
-            IRule<T, T1> rule1,
-            IRule<T, T2> rule2);
-    }
+    //    public IRequestGroupValidator<T1, T2> Group<T1, T2>(IRule<T, T1> rule1, IRule<T, T2> rule2)
+    //    {
+    //        throw new NotImplementedException();
+    //        //return new RequestGroupValidator<T, T1, T2>(_request, new IRule<T, object>[] { rule1, rule2 });
+    //    }
+    //}
 
-    public interface IRequestGroupValidator<T1, T2>
-    {
-        ValidationResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
-        Task<ValidationResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
-    }
+    //internal class RequestGroupValidator<T, T1, T2> : IRequestGroupValidator<T1, T2>
+    //{
+    //    private readonly T _request;
+    //    private readonly IRule<T, object>[] _rules;
 
-    public interface IRequestValidator<in T, TValid>
-    {
-        ValidationResult<TValid> Validate(T value);
-    }
+    //    public RequestGroupValidator(T request, IRule<T, object>[] rules)
+    //    {
+    //        _request = request;
+    //        _rules = rules;
+    //        throw new NotImplementedException();
+    //    }
 
-    public interface ISingleRule<T, TValid> : IRule<T, TValid>
-    {
-        IRule<T, TValid> WithData(string key, object data);
-    }
+    //    public ValidationResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
+    //        => Validate<TValueObject>(createValueObjectFunc);
 
-    public interface IRule<T, TValid>
-    {
+    //    public Task<ValidationResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc)
+    //    {
+    //        throw new NotImplementedException();
+    //    }
 
-    }
+    //    private ValidationResult<TValueObject> Validate<TValueObject>(Delegate createValueObjectFunc)
+    //    {
+    //        throw new NotImplementedException();
+    //        //var validationFailuresByPropertyName = new Dictionary<string, List<IValidationFailure>>();
+    //        //foreach (var rule in _rules)
+    //        //{
+    //        //    var validationFailures = rule.Validate(_request);
+    //        //    foreach (var validationFailure in validationFailures)
+    //        //    {
+    //        //        if (!validationFailuresByPropertyName.TryGetValue(validationFailure.Key, out var failureList))
+    //        //        {
+    //        //            failureList = new List<IValidationFailure>();
+    //        //        }
 
-    public interface IGroupRule<T, TValid> : IRule<T, TValid>
-    {
+    //        //        failureList.AddRange(validationFailure.Value);
+    //        //    }
+    //        //}
 
-    }
+    //        //if (validationFailuresByPropertyName.Any())
+    //        //{
+    //        //    return ValidationResult<TValueObject>.Failure(validationFailuresByPropertyName());
+    //        //}
 
-    public abstract class AbstractRequestValidator<T, TValid> : IRequestValidator<T, TValid>
-    {
-        public abstract ValidationResult<TValid> Validate(T value);
+    //        //var valueObject = createValueObjectFunc.inv
+    //        //rule1.Delegate.DynamicInvoke()
+    //        //throw new NotImplementedException();
+    //    }
+    //}
 
-        public ISingleRule<T, TValueObject> Rule<TProperty, TValueObject>(
-            Func<T, TProperty> func,
-            Func<TProperty, Result<TValueObject>> valueObjectFunc)
-        {
-            throw new NotImplementedException();
-        }
+    //public interface IRequestValidatorBuilder<T>
+    //{
+    //    IRequestGroupValidator<T1, T2> Group<T1, T2>(
+    //        IRule<T, T1> rule1,
+    //        IRule<T, T2> rule2);
+    //}
 
-        public IGroupRule<T, TValueObject> Rule<TProperty1, TProperty2, TValueObject>(
-            Func<T, TProperty1> prop1Selector,
-            Func<T, TProperty2> prop2Selector,
-            Func<TProperty1, TProperty2, GroupResult<TValueObject>> valueObjectFunc)
-        {
-            throw new NotImplementedException();
-        }
-    }
+    //public interface IRequestGroupValidator<T1, T2>
+    //{
+    //    ValidationResult<TValueObject> WhenValid<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+    //    Task<ValidationResult<TValueObject>> WhenValidAsync<TValueObject>(Func<T1, T2, TValueObject> createValueObjectFunc);
+    //}
+
+    //public interface IRequestValidator<in T, TValid>
+    //{
+    //    ValidationResult<TValid> Validate(T value);
+    //}
+
+    //public interface ISingleRule<T, TValueObject> : IRule<T, TValueObject>
+    //{
+    //    // TODO: Implement?
+    //    //IRule<T, TValid> WithData(string key, object data);
+    //}
+
+    //public interface IRule<T, TValueObject>
+    //{
+    //    IDictionary<string, IEnumerable<IValidationFailure>> Validate(T request);
+    //}
+
+
+
+    //public interface IGroupRule<T, TValueObject> : IRule<T, TValueObject>
+    //{
+
+    //}
+
+    //public abstract class AbstractRequestValidator<T, TValid> : IRequestValidator<T, TValid>
+    //{
+    //    public abstract ValidationResult<TValid> Validate(T value);
+
+    //    public ISingleRule<T, TValueObject> Rule<TProperty, TValueObject>(
+    //        Expression<Func<T, TProperty>> selector,
+    //        Func<TProperty, SingleResult<TValueObject>> valueObjectFunc)
+    //    {
+    //        throw new NotImplementedException();
+    //        //var propertyName = FromExpression(selector);
+    //        //var value = selector.Compile().Invoke
+    //    }
+
+    //    public IGroupRule<T, TValueObject> Rule<TProperty1, TProperty2, TValueObject>(
+    //        Func<T, TProperty1> prop1Selector,
+    //        Func<T, TProperty2> prop2Selector,
+    //        Func<TProperty1, TProperty2, GroupResult<TValueObject>> valueObjectFunc)
+    //    {
+    //        throw new NotImplementedException();
+    //    }
+
+    //    private static string FromExpression(Expression expression)
+    //    {
+    //        if (expression is not LambdaExpression lambdaExpression)
+    //        {
+    //            throw new InvalidOperationException();
+    //        }
+
+    //        var memberNames = new Stack<string>();
+
+    //        var getMemberExp = new Func<Expression?, MemberExpression?>(toUnwrap =>
+    //        {
+    //            if (toUnwrap is UnaryExpression unaryExpression)
+    //            {
+    //                return unaryExpression.Operand as MemberExpression;
+    //            }
+
+    //            return toUnwrap as MemberExpression;
+    //        });
+
+    //        var memberExp = getMemberExp(lambdaExpression.Body);
+
+    //        while (memberExp is not null)
+    //        {
+    //            memberNames.Push(memberExp.Member.Name);
+    //            memberExp = getMemberExp(memberExp.Expression);
+    //        }
+
+    //        return memberNames.Peek();
+    //    }
+    //}
 }
